@@ -1,0 +1,35 @@
+# -------------------------------------
+# STAGE 1: BUILDER - Compile Dependencies & Build App
+# Uses a modern Node version (v20) for building, ensuring all dev tools and dependencies are present.
+# -------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app/frontend
+
+COPY ./frontend/package*.json ./
+
+RUN npm install
+
+COPY ./frontend .
+
+RUN npm run build
+
+# -------------------------------------
+# STAGE 2: FINAL IMAGE - Runtime Environment (Serving Assets)
+# Uses a minimal runtime image that has Node installed and can execute `npm start`.
+FROM node:20-alpine AS final
+
+WORKDIR /app/frontend
+
+# Copy core dependencies (the node_modules folder compiled by the builder stage)
+COPY --from=builder /app/frontend/node_modules ./node_modules
+
+# Copy the built static assets to the working directory (dist is where vite outputs)
+COPY --from=builder /app/frontend/dist ./dist
+COPY --from=builder /app/frontend/package.json ./package.json
+COPY --from=builder /app/frontend/vite.config.js ./vite.config.js
+COPY --from=builder /app/frontend/index.html ./index.html
+
+EXPOSE 3000:3000
+
+CMD ["npm", "run", "preview"]

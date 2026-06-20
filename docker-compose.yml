@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # --- Postgres Database Service ---
+  db:
+    image: postgres:14-alpine
+    container_name: mytodo_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password # !! IMPORTANT: Change this in production !!
+      POSTGRES_DB: mydb 
+
+    ports:
+      # Host:Container mapping (allows local access for debugging)
+      - "5432:5432" 
+    volumes:
+      # Persist data across container restarts
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- Backend API Service ---
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: mytodo_api
+    restart: always
+    ports:
+      - "8000:8000" # Host Port:Container Port
+    depends_on:
+      # Ensure the database is up before starting the API
+      - db 
+    environment:
+      # Pass environment variables to decouple configuration from code
+      DATABASE_URL: postgresql://user:password@db:5432/mydb
+
+  # --- Frontend Service (Client App) ---
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: mytodo_client
+    restart: always
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+
+# Define volumes for data persistence
+volumes:
+  postgres_data:
