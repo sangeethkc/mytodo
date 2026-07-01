@@ -1,42 +1,38 @@
-# -------------------------------------
-# STAGE 1: BUILDER - Compile dependencies
-# Uses a full development environment to ensure all packages (like psycopg2) compile correctly.
-# -------------------------------------
 FROM python:3.10 AS builder
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app/backend
 
-# Install necessary system libraries for complex Python package compilation (e.g., databases, crypto)
 RUN apt-get update && \
-    apt-get install -y git build-essential libpq-dev gcc python3-dev&& rm -rf /var/lib/apt/lists/*
+    apt-get install -y git build-essential libpq-dev gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies into a specific directory
 COPY requirements.txt .
 RUN pip wheel --wheel-dir /wheels -r requirements.txt
 
-# -------------------------------------
-# STAGE 2: FINAL IMAGE - Production Runtime
-# Uses a slim base image; only copies required files/gems from the builder stage.
-# -------------------------------------
 FROM python:3.10-slim AS final
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app/backend
 
-# Copy installed wheels from the builder stage to avoid recompiling anything
 COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir /wheels/*.whl
+RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
 
-# Copy only the application code needed at runtime
 COPY backend/ .
 
-# Expose the port Uvicorn runs on
+RUN chown -R appuser:appuser /app/backend
+
+USER appuser
+
 EXPOSE 8000
 
-# Command to run the application in production mode (use gunicorn/uvicorn for robust web server handling)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

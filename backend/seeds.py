@@ -1,39 +1,26 @@
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
+import os
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from models import Base, Todo
 
-# --- Database Setup (Duplicated for encapsulation) ---
-SQLALCHEMY_DATABASE_URL = "postgresql://user:password@localhost/mydb" 
-engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50))
-    email = Column(String(100), unique=True)
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5432/mydb")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def seed_database():
-    """Populates the database with initial sample user data."""
-    from sqlalchemy.orm import Session # Need to redefine this for standalone execution if run as a script
-
-    db: Session = engine.begin()
-    
-    # Check if users already exist to prevent insertion errors on re-run
-    print("Checking existing users...")
-    existing_users = db.execute(f"SELECT email FROM users").fetchall()
-    if any(row[0] for row in existing_users):
-        print("Seed data already exists. Skipping seed.")
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    if db.query(Todo).first():
+        print("Seed data already exists. Skipping.")
         return
-
-    print("Inserting initial seed data...")
-    # Insert sample users using bulk operation for efficiency
-    user_data = [
-        {"name": "Alice", "email": "alice@example.com"},
-        {"name": "Bob", "email": "bob@example.com"}
+    todos = [
+        Todo(text="Learn Docker", completed=False),
+        Todo(text="Build a todo app", completed=True),
+        Todo(text="Write tests", completed=False),
     ]
-
-    stmt = User.__table__.insert()
-    db.execute(stmt, [*user_data])
+    db.add_all(todos)
     db.commit()
-    print("✅ Database seeded successfully!")
+    print(f"Seeded {len(todos)} todos.")
+
+if __name__ == "__main__":
+    seed_database()

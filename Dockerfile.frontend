@@ -1,7 +1,3 @@
-# -------------------------------------
-# STAGE 1: BUILDER - Compile Dependencies & Build App
-# Uses a modern Node version (v20) for building, ensuring all dev tools and dependencies are present.
-# -------------------------------------
 FROM node:20-alpine AS builder
 
 WORKDIR /app/frontend
@@ -12,23 +8,39 @@ RUN npm install
 
 COPY ./frontend .
 
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_PORT
+ENV VITE_PORT=$VITE_PORT
+
+RUN echo "VITE_API_URL=${VITE_API_URL}" && echo "VITE_PORT=${VITE_PORT}"
+
 RUN npm run build
 
-# -------------------------------------
-# STAGE 2: FINAL IMAGE - Runtime Environment (Serving Assets)
-# Uses a minimal runtime image that has Node installed and can execute `npm start`.
 FROM node:20-alpine AS final
+
+RUN addgroup -S appuser && adduser -S appuser -G appuser
 
 WORKDIR /app/frontend
 
-# Copy core dependencies (the node_modules folder compiled by the builder stage)
 COPY --from=builder /app/frontend/node_modules ./node_modules
-
-# Copy the built static assets to the working directory (dist is where vite outputs)
 COPY --from=builder /app/frontend/dist ./dist
 COPY --from=builder /app/frontend/package.json ./package.json
 COPY --from=builder /app/frontend/vite.config.js ./vite.config.js
 COPY --from=builder /app/frontend/index.html ./index.html
 
-EXPOSE 4173
+ARG VITE_PORT
+ENV VITE_PORT=$VITE_PORT
+
+RUN echo "VITE_PORT=${VITE_PORT}"
+
+RUN chown -R appuser:appuser /app/frontend
+
+USER appuser
+
+EXPOSE ${VITE_PORT:-4173}
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD sh -c "wget --no-verbose --tries=1 --spider http://localhost:${VITE_PORT:-4173}/ || exit 1"
+
 CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
