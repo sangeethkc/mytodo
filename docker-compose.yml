@@ -60,6 +60,8 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_PORT: ${VITE_PORT:-4173}
+        VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-app-006.notgr.xyz}
     container_name: mytodo_client
     restart: always
     ports:
